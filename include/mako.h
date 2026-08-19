@@ -35,6 +35,10 @@ struct mako_surface {
 	bool dirty; // Do we need to redraw?
 	int32_t scale;
 
+	// Última vez que se dibujó de verdad, para limitar los fps del gradiente
+	// giratorio del borde (border-gradient-fps).
+	uint32_t last_render_ms;
+
 	char *configured_output;
 	enum zwlr_layer_shell_v1_layer layer;
 	uint32_t anchor;

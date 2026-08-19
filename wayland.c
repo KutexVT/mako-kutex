@@ -611,6 +611,7 @@ static void send_frame(struct mako_surface *surface) {
 	struct mako_output *output = get_configured_output(surface);
 	int width = 0, height = 0;
 	render(surface, surface->current_buffer, scale, &width, &height);
+	surface->last_render_ms = get_monotonic_ms();
 
 	// There are two cases where we want to tear down the surface: zero
 	// notifications (height = 0) or moving between outputs.
@@ -717,6 +718,28 @@ static void send_frame(struct mako_surface *surface) {
 	surface->dirty = false;
 }
 
+// ¿Alguna notificación de esta capa tiene el borde girando? Solo entonces hay
+// que encadenar frames; si no, mako se queda quieto como siempre. Devuelve
+// además el fps más alto que pida alguna de ellas.
+static bool border_is_animated(struct mako_surface *surface, int *fps) {
+	bool animated = false;
+	struct mako_notification *notif;
+	wl_list_for_each(notif, &surface->state->notifications, link) {
+		if (notif->surface != surface || notif->style.invisible) {
+			continue;
+		}
+		if (notif->style.colors.border_gradient_len >= 2 &&
+				notif->style.border_gradient_period > 0 &&
+				notif->style.border_size > 0) {
+			animated = true;
+			if (notif->style.border_gradient_fps > *fps) {
+				*fps = notif->style.border_gradient_fps;
+			}
+		}
+	}
+	return animated;
+}
+
 static void frame_handle_done(void *data, struct wl_callback *callback,
 		uint32_t time) {
 	struct mako_surface *surface = data;
@@ -724,6 +747,27 @@ static void frame_handle_done(void *data, struct wl_callback *callback,
 	if (surface->frame_callback) {
 		wl_callback_destroy(surface->frame_callback);
 		surface->frame_callback = NULL;
+	}
+
+	// Con el borde animado hay que repintar aunque no haya cambiado nada. El
+	// tope de fps se aplica acá y no dentro del render: si todavía no toca, se
+	// pide otro frame y nos ahorramos el trabajo de cairo/pango, que es lo
+	// caro. El monitor puede ir a 180 Hz y no hace falta gastar eso.
+	int fps = 0;
+	if (!surface->dirty && surface->surface != NULL &&
+			border_is_animated(surface, &fps)) {
+		if (fps < 1) {
+			// La config no deja bajar de 1, pero un estilo a medio construir
+			// sí podría traer 0 y acá eso sería una división por cero.
+			fps = 60;
+		}
+		uint32_t elapsed = get_monotonic_ms() - surface->last_render_ms;
+		if (elapsed >= (uint32_t)(1000 / fps)) {
+			surface->dirty = true;
+		} else {
+			schedule_frame_and_commit(surface);
+			return;
+		}
 	}
 
 	// Only draw again if we need to

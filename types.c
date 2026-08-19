@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
+#include <time.h>
 #include <wayland-client.h>
 #include <wordexp.h>
 #include <unistd.h>
@@ -73,6 +74,69 @@ bool parse_color(const char *string, uint32_t *out) {
 		*out = (*out << 8) | 0xFF;
 	}
 	return true;
+}
+
+// Parsea una lista de colores separados por comas ("#4D9FFF,#7C3AED,#4D9FFF").
+// Cada elemento usa el mismo formato que parse_color. En caso de fallo no se
+// toca `out`, para que el estilo quede como estaba.
+bool parse_color_list(const char *string, uint32_t **out, size_t *out_len) {
+	char *colors = strdup(string);
+	if (colors == NULL) {
+		return false;
+	}
+
+	uint32_t *list = NULL;
+	size_t len = 0;
+
+	char *saveptr = NULL;
+	char *token = strtok_r(colors, ",", &saveptr);
+	while (token != NULL) {
+		// Tolerar espacios alrededor de las comas.
+		while (*token == ' ' || *token == '\t') {
+			++token;
+		}
+		size_t token_len = strlen(token);
+		while (token_len > 0 &&
+				(token[token_len - 1] == ' ' || token[token_len - 1] == '\t')) {
+			token[--token_len] = '\0';
+		}
+
+		uint32_t color;
+		if (!parse_color(token, &color)) {
+			free(list);
+			free(colors);
+			return false;
+		}
+
+		uint32_t *new_list = realloc(list, (len + 1) * sizeof(uint32_t));
+		if (new_list == NULL) {
+			free(list);
+			free(colors);
+			return false;
+		}
+		list = new_list;
+		list[len++] = color;
+
+		token = strtok_r(NULL, ",", &saveptr);
+	}
+
+	free(colors);
+
+	if (len == 0) {
+		free(list);
+		return false;
+	}
+
+	free(*out);
+	*out = list;
+	*out_len = len;
+	return true;
+}
+
+uint32_t get_monotonic_ms(void) {
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (uint32_t)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
 }
 
 bool parse_mako_color(const char *string, struct mako_color *out) {

@@ -2,6 +2,7 @@
 #define MAKO_TYPES_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <cairo.h>
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
@@ -15,8 +16,14 @@ bool parse_boolean(const char *string, bool *out);
 bool parse_int(const char *string, int *out);
 bool parse_int_ge(const char *string, int *out, int min);
 bool parse_color(const char *string, uint32_t *out);
+bool parse_color_list(const char *string, uint32_t **out, size_t *out_len);
 bool parse_mako_color(const char *string, struct mako_color *out);
 bool parse_anchor(const char *string, uint32_t *out);
+
+// Milisegundos de CLOCK_MONOTONIC. Se usa para animar el gradiente del borde:
+// el ángulo depende del reloj, no del contador de frames, para que la vuelta
+// dure lo mismo aunque se salten frames por el límite de fps.
+uint32_t get_monotonic_ms(void);
 
 enum mako_notification_urgency {
 	MAKO_NOTIFICATION_URGENCY_LOW = 0,

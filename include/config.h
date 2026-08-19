@@ -42,9 +42,10 @@ struct mako_style_spec {
 	bool width, height, outer_margin, margin, padding, border_size, border_radius, font,
 		markup, format, text_alignment, actions, default_timeout, ignore_timeout,
 		icons, max_icon_size, icon_path, icon_border_radius, group_criteria_spec, invisible, history,
-		icon_location, max_visible, layer, output, anchor;
+		icon_location, max_visible, layer, output, anchor,
+		border_gradient_angle, border_gradient_period, border_gradient_fps;
 	struct {
-		bool background, text, border, progress;
+		bool background, text, border, border_gradient, progress;
 	} colors;
 	struct {
 		bool left, right, middle;
@@ -64,6 +65,13 @@ struct mako_style {
 	struct mako_directional border_radius;
 	int32_t border_size;
 
+	// Borde con gradiente giratorio, al estilo del borde de la ventana activa
+	// de Hyprland (general:col.active_border + animation borderangle). El
+	// gradiente vive en colors.border_gradient; acá va solo su geometría.
+	int32_t border_gradient_angle;  // grados, ángulo inicial
+	int32_t border_gradient_period; // ms por vuelta completa; 0 = no gira
+	int32_t border_gradient_fps;    // tope de redibujado mientras gira
+
 	bool icons;
 	int32_t max_icon_size;
 	char *icon_path;
@@ -82,6 +90,10 @@ struct mako_style {
 		uint32_t background;
 		uint32_t text;
 		uint32_t border;
+		// Con 2 o más colores el borde se pinta con este gradiente en vez de
+		// con `border`, que queda de fallback.
+		uint32_t *border_gradient;
+		size_t border_gradient_len;
 		struct mako_color progress;
 	} colors;
 

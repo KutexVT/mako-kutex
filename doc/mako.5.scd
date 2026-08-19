@@ -176,6 +176,38 @@ Supported actions:
 
 	Default: #4C7899FF
 
+*border-gradient*=_color_[,_color_]...
+	Draw the popup border with a linear gradient through the given colors
+	instead of a solid *border-color*. Each color uses the same format
+	described in *COLORS*. At least two colors are required; with fewer,
+	*border-color* is used as before.
+
+	The gradient rotates over time, like the active window border in
+	Hyprland (_general:col.active_border_ combined with the _borderangle_
+	animation). To avoid a visible seam when the rotation wraps around,
+	repeat the first color at the end.
+
+	Default: unset
+
+*border-gradient-angle*=_degrees_
+	Starting angle of *border-gradient*, in degrees. 0 points up and the
+	angle increases clockwise, matching CSS and Hyprland.
+
+	Default: 45
+
+*border-gradient-period*=_ms_
+	Milliseconds for *border-gradient* to complete one full turn. Set to 0
+	to keep the gradient static.
+
+	Default: 8000
+
+*border-gradient-fps*=_fps_
+	Upper bound on how often the popup is redrawn while *border-gradient*
+	rotates. Frames are otherwise driven at the display refresh rate, which
+	is wasted work on a high refresh rate monitor.
+
+	Default: 60
+
 *border-radius*=_directional_
 	Set popup corner radius on each side to the size specified by _directional_. See
 	*DIRECTIONAL VALUES* for more information.

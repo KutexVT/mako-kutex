@@ -30,6 +30,8 @@ pangocairo = dependency('pangocairo')
 glib = dependency('glib-2.0')
 gobject = dependency('gobject-2.0')
 realtime = cc.find_library('rt')
+# sin/cos/fabs para el ángulo del gradiente del borde (render.c)
+libm = cc.find_library('m', required: false)
 wayland_client = dependency('wayland-client')
 wayland_protos = dependency('wayland-protocols', version: '>=1.32')
 wayland_cursor = dependency('wayland-cursor')
@@ -86,6 +88,7 @@ executable(
 		cairo,
 		epoll,
 		gdk_pixbuf,
+		libm,
 		sdbus,
 		pango,
 		pangocairo,

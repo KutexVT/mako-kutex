@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdlib.h>
 #include <cairo/cairo.h>
 #include <pango/pangocairo.h>
@@ -11,7 +12,10 @@
 #include "wlr-layer-shell-unstable-v1-client-protocol.h"
 #include "icon.h"
 
+// math.h ya lo define en glibc; el fallback es para plataformas donde no.
+#ifndef M_PI
 #define M_PI 3.14159265358979323846
+#endif
 
 // HiDPI conventions: local variables are in surface-local coordinates, unless
 // they have a "buffer_" prefix, in which case they are in buffer-local
@@ -23,6 +27,59 @@ static void set_source_u32(cairo_t *cairo, uint32_t color) {
 		(color >> (2*8) & 0xFF) / 255.0,
 		(color >> (1*8) & 0xFF) / 255.0,
 		(color >> (0*8) & 0xFF) / 255.0);
+}
+
+// Pinta el borde. Con border-gradient definido (2 colores o más) se usa un
+// degradado lineal que gira con el reloj, igual que el borde de la ventana
+// activa de Hyprland (col.active_border + animation borderangle); si no, el
+// color plano de border-color de siempre.
+//
+// x/y/width/height son las del rectángulo del borde en coordenadas de
+// superficie (sin escalar): el patrón tiene que cubrir el mismo rectángulo que
+// el path, así que acá se aplica el scale igual que en set_rounded_rectangle.
+static void set_source_border(cairo_t *cairo, struct mako_style *style,
+		double x, double y, double width, double height, int scale) {
+	size_t len = style->colors.border_gradient_len;
+	if (style->colors.border_gradient == NULL || len < 2) {
+		set_source_u32(cairo, style->colors.border);
+		return;
+	}
+
+	double angle = style->border_gradient_angle;
+	if (style->border_gradient_period > 0) {
+		uint32_t period = (uint32_t)style->border_gradient_period;
+		angle += 360.0 * (get_monotonic_ms() % period) / period;
+	}
+
+	x *= scale;
+	y *= scale;
+	width *= scale;
+	height *= scale;
+
+	// Misma convención que el linear-gradient de CSS y que Hyprland: 0° apunta
+	// hacia arriba y el ángulo crece en sentido horario. La longitud es la
+	// proyección del rectángulo sobre esa dirección, para que el degradado
+	// abarque justo de esquina a esquina sin franjas planas en las puntas.
+	double rad = angle * M_PI / 180.0;
+	double dx = sin(rad), dy = -cos(rad);
+	double len_px = fabs(width * sin(rad)) + fabs(height * cos(rad));
+	double cx = x + width / 2.0, cy = y + height / 2.0;
+
+	cairo_pattern_t *pattern = cairo_pattern_create_linear(
+		cx - dx * len_px / 2.0, cy - dy * len_px / 2.0,
+		cx + dx * len_px / 2.0, cy + dy * len_px / 2.0);
+
+	for (size_t i = 0; i < len; ++i) {
+		uint32_t color = style->colors.border_gradient[i];
+		cairo_pattern_add_color_stop_rgba(pattern, (double)i / (len - 1),
+			(color >> (3*8) & 0xFF) / 255.0,
+			(color >> (2*8) & 0xFF) / 255.0,
+			(color >> (1*8) & 0xFF) / 255.0,
+			(color >> (0*8) & 0xFF) / 255.0);
+	}
+
+	cairo_set_source(cairo, pattern);
+	cairo_pattern_destroy(pattern);
 }
 
 static void set_layout_size(PangoLayout *layout, int width, int height,
@@ -263,7 +320,15 @@ static int render_notification(cairo_t *cairo, struct mako_state *state, struct 
 	// of the background when using a translucent border color.
 	cairo_save(cairo);
 	cairo_append_path(cairo, border_path);
-	set_source_u32(cairo, style->colors.border);
+	// El gradiente se calcula sobre el rectángulo de ESTA notificación (las
+	// mismas medidas que se le pasaron a set_rounded_rectangle), así que cada
+	// burbuja lleva su vuelta completa, igual que cada ventana en Hyprland.
+	set_source_border(cairo, style,
+		offset_x + style->border_size / 2.0,
+		offset_y + style->border_size / 2.0,
+		notif_background_width,
+		notif_height - style->border_size,
+		scale);
 	cairo_set_operator(cairo, CAIRO_OPERATOR_SOURCE);
 	cairo_set_line_width(cairo, style->border_size * scale);
 	cairo_stroke(cairo);

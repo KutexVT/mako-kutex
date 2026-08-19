@@ -114,8 +114,16 @@ void init_default_style(struct mako_style *style) {
 	style->colors.background = 0x285577FF;
 	style->colors.text = 0xFFFFFFFF;
 	style->colors.border = 0x4C7899FF;
+	style->colors.border_gradient = NULL;
+	style->colors.border_gradient_len = 0;
 	style->colors.progress.value = 0x5588AAFF;
 	style->colors.progress.operator = CAIRO_OPERATOR_OVER;
+
+	// Sin border-gradient definido esto no hace nada. 8 s por vuelta es lo
+	// mismo que da `borderangle` a speed 80 en Hyprland.
+	style->border_gradient_angle = 45;
+	style->border_gradient_period = 8000;
+	style->border_gradient_fps = 60;
 
 	style->group_criteria_spec.none = true;
 	style->invisible = false;
@@ -158,6 +166,7 @@ void finish_style(struct mako_style *style) {
 	free(style->font);
 	free(style->format);
 	free(style->output);
+	free(style->colors.border_gradient);
 }
 
 static void copy_binding(struct mako_binding *dst,
@@ -219,6 +228,24 @@ bool apply_style(struct mako_style *target, const struct mako_style *style) {
 			fprintf(stderr, "allocation failed\n");
 			return false;
 		}
+	}
+
+	// El gradiente es un array propio, así que se copia como los strings de
+	// arriba: entero y por adelantado, para poder bailar sin tocar `target`.
+	uint32_t *new_border_gradient = NULL;
+	if (style->spec.colors.border_gradient &&
+			style->colors.border_gradient_len > 0) {
+		size_t size = style->colors.border_gradient_len * sizeof(uint32_t);
+		new_border_gradient = malloc(size);
+		if (new_border_gradient == NULL) {
+			free(new_format);
+			free(new_font);
+			free(new_icon_path);
+			free(new_output);
+			fprintf(stderr, "allocation failed\n");
+			return false;
+		}
+		memcpy(new_border_gradient, style->colors.border_gradient, size);
 	}
 
 	// Now on to actually setting things!
@@ -324,6 +351,28 @@ bool apply_style(struct mako_style *target, const struct mako_style *style) {
 	if (style->spec.colors.border) {
 		target->colors.border = style->colors.border;
 		target->spec.colors.border = true;
+	}
+
+	if (style->spec.colors.border_gradient) {
+		free(target->colors.border_gradient);
+		target->colors.border_gradient = new_border_gradient;
+		target->colors.border_gradient_len = style->colors.border_gradient_len;
+		target->spec.colors.border_gradient = true;
+	}
+
+	if (style->spec.border_gradient_angle) {
+		target->border_gradient_angle = style->border_gradient_angle;
+		target->spec.border_gradient_angle = true;
+	}
+
+	if (style->spec.border_gradient_period) {
+		target->border_gradient_period = style->border_gradient_period;
+		target->spec.border_gradient_period = true;
+	}
+
+	if (style->spec.border_gradient_fps) {
+		target->border_gradient_fps = style->border_gradient_fps;
+		target->spec.border_gradient_fps = true;
 	}
 
 	if (style->spec.colors.progress) {
@@ -585,6 +634,18 @@ static bool apply_style_option(struct mako_style *style, const char *name,
 		return spec->border_size = parse_int_ge(value, &style->border_size, 0);
 	} else if (strcmp(name, "border-color") == 0) {
 		return spec->colors.border = parse_color(value, &style->colors.border);
+	} else if (strcmp(name, "border-gradient") == 0) {
+		return spec->colors.border_gradient = parse_color_list(value,
+			&style->colors.border_gradient, &style->colors.border_gradient_len);
+	} else if (strcmp(name, "border-gradient-angle") == 0) {
+		return spec->border_gradient_angle =
+			parse_int(value, &style->border_gradient_angle);
+	} else if (strcmp(name, "border-gradient-period") == 0) {
+		return spec->border_gradient_period =
+			parse_int_ge(value, &style->border_gradient_period, 0);
+	} else if (strcmp(name, "border-gradient-fps") == 0) {
+		return spec->border_gradient_fps =
+			parse_int_ge(value, &style->border_gradient_fps, 1);
 	} else if (strcmp(name, "progress-color") == 0) {
 		return spec->colors.progress = parse_mako_color(value, &style->colors.progress);
 	} else if (strcmp(name, "icons") == 0) {
@@ -906,6 +967,10 @@ int parse_config_arguments(struct mako_config *config, int argc, char **argv) {
 		{"padding", required_argument, 0, 0},
 		{"border-size", required_argument, 0, 0},
 		{"border-color", required_argument, 0, 0},
+		{"border-gradient", required_argument, 0, 0},
+		{"border-gradient-angle", required_argument, 0, 0},
+		{"border-gradient-period", required_argument, 0, 0},
+		{"border-gradient-fps", required_argument, 0, 0},
 		{"border-radius", required_argument, 0, 0},
 		{"progress-color", required_argument, 0, 0},
 		{"icons", required_argument, 0, 0},
