@@ -1,3 +1,9 @@
+# Mako Kutex
+
+Fork de [emersion/mako](https://github.com/emersion/mako) con borde de gradiente giratorio para las notificaciones. El cambio propio se conserva en la rama `kutex` junto con el historial y la licencia originales.
+
+---
+
 # mako
 
 A lightweight notification daemon for Wayland. Works on Sway.
